@@ -8,7 +8,7 @@ Suggested implementation order: SETUP-1, then CORE-1 to CORE-4 (movement/camera 
 
 ### [SETUP-1] Project Setup and Input Foundation
 
-**Labels:** `project-setup` `devops` `v0.1.0-project-setup`
+**Labels:** `project-setup` `devops` `v0.1.0-project-setup` `ready`
 
 **Owner:** Project Lead (Rohaan)
 
@@ -31,7 +31,7 @@ Establish the shared Unity project foundation so all programmers can work in par
 
 ### [CORE-1] Third-Person Camera
 
-**Labels:** `core-gameplay` `v0.2.0-core-gameplay`
+**Labels:** `core-gameplay` `v0.2.0-core-gameplay` `ready`
 
 **Owner:** Gameplay Programmer (TBD)
 
@@ -54,7 +54,7 @@ Implement a third-person camera that follows the player and supports mouse look.
 
 ### [CORE-2] Player Movement
 
-**Labels:** `core-gameplay` `v0.2.0-core-gameplay`
+**Labels:** `core-gameplay` `v0.2.0-core-gameplay` `ready`
 
 **Owner:** Gameplay Programmer (TBD)
 
@@ -78,7 +78,7 @@ Implement the core third-person player controller: movement, jumping, gravity, a
 
 ### [CORE-3] Health System
 
-**Labels:** `core-gameplay` `v0.2.0-core-gameplay`
+**Labels:** `core-gameplay` `v0.2.0-core-gameplay` `ready`
 
 **Owner:** Gameplay Programmer (TBD)
 
@@ -101,7 +101,7 @@ Create a reusable health component and a shared damage interface used by the pla
 
 ### [CORE-4] Player Health UI and Death State
 
-**Labels:** `core-gameplay` `ui` `v0.2.0-core-gameplay`
+**Labels:** `core-gameplay` `ui` `v0.2.0-core-gameplay` `ready`
 
 **Owner:** Gameplay Programmer (TBD)
 
@@ -123,7 +123,7 @@ Give the player visible health feedback and a defined death state, so the player
 
 ### [CMB-1] Hitboxes and Damage Pipeline
 
-**Labels:** `combat` `v0.3.0-combat`
+**Labels:** `combat` `v0.3.0-combat` `ready`
 
 **Owner:** Gameplay Programmer (TBD)
 
@@ -147,7 +147,7 @@ Implement hitboxes and hurtboxes that deliver damage between attackers and targe
 
 ### [CMB-2] Training Dummy and Test Setup
 
-**Labels:** `combat` `v0.3.0-combat`
+**Labels:** `combat` `v0.3.0-combat` `ready`
 
 **Owner:** Gameplay Programmer (TBD)
 
@@ -169,7 +169,7 @@ Create a stationary, damageable training dummy so attacks and damage can be test
 
 ### [CMB-3] Player Attack Mechanics
 
-**Labels:** `combat` `v0.3.0-combat`
+**Labels:** `combat` `v0.3.0-combat` `ready`
 
 **Owner:** Gameplay Programmer (TBD)
 
@@ -194,7 +194,7 @@ Implement the player's basic melee attack, which serves as the foundation of the
 
 ### [AI-1] Basic Enemy Prefab and NavMesh Pathing
 
-**Labels:** `enemy-ai` `v0.4.0-enemy-ai`
+**Labels:** `enemy-ai` `v0.4.0-enemy-ai` `ready`
 
 **Owner:** Gameplay Programmer (TBD)
 
@@ -218,7 +218,7 @@ Create the base enemy prefab and implement basic pathfinding toward the player u
 
 ### [AI-2] Enemy State Machine and Attack
 
-**Labels:** `enemy-ai` `v0.4.0-enemy-ai`
+**Labels:** `enemy-ai` `v0.4.0-enemy-ai` `ready`
 
 **Owner:** Gameplay Programmer (TBD)
 
@@ -242,7 +242,7 @@ Add an explicit state machine to the enemy so behavior is cleanly separated and 
 
 ### [TEST-1] Core Systems Integration Test
 
-**Labels:** `testing` `docs` `v0.5.0-testing`
+**Labels:** `testing` `docs` `v0.5.0-testing` `ready`
 
 **Owner:** Whole team
 
