@@ -23,7 +23,7 @@ jobs:
     # Only create a branch when one of the three component labels
     # is added. Ignore security/docs/devops/iteration labels.
     if: >
-      github.event.label.name == 'active'
+      github.event.label.name == 'ready'
 
     runs-on: ubuntu-latest
 
