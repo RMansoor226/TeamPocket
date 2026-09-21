@@ -1,4 +1,4 @@
-# Iceflame Redemption
+# Work in Progress Title
 ### Unity | C# | 3D Action-Adventure | Team Pocket
 
 > A 3rd-person action-adventure game where magic enhances melee, enemies form a
@@ -6,7 +6,7 @@
 
 ## Project Summary
 
-**Iceflame Redemption** is a 3rd-person 3D action-adventure game developed by **Team Pocket** for a college game development club. The project is scoped as a **9-week minimum viable product (MVP)**: a vertical slice of 1–2 levels that demonstrates the core combat loop and enemy design.
+**Work in Progress Title** is a 3rd-person 3D action-adventure game developed by **Team Pocket** for a college game development club. The project is scoped as a **9-week minimum viable product (MVP)**: a vertical slice of 1–2 levels that demonstrates the core combat loop and enemy design.
 
 You play as **Vyx**, a young mage born into a town where magic is taboo and sacrilegious. Vyx has innate control of the magic arts and must use their power for good while evading a condemning society, becoming a symbol of the hope magic can bring.
 
