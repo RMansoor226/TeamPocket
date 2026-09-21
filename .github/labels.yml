@@ -1,4 +1,13 @@
 # ---------------------------------------------------------------
+# Status labels
+# Issues marked as labels
+# ---------------------------------------------------------------
+
+- name: ready
+  color: "0E8A16"
+  description: "Issue is unblocked and ready for a branch to be created"
+
+# ---------------------------------------------------------------
 # Component labels
 # Each issue gets exactly ONE of the branch-mapped component labels
 # (project-setup, core-gameplay, combat, enemy-ai, testing).
