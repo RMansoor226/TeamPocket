@@ -70,7 +70,7 @@ jobs:
              *   3. The content belonging to that issue
              */
             const headingRegex =
-              /^### \[((?:DB|API|FE)-\d+)\] (.+)$/gm;
+              /^### \[([A-Z]+-\d+)\] (.+)$/gm;
 
             const matches = [...markdown.matchAll(headingRegex)];
 
