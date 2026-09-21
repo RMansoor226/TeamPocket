@@ -1,0 +1,30 @@
+# Configuration for robvanderleek/create-issue-branch
+
+# Create the branch immediately when the workflow invokes the action.
+mode: immediate
+
+# Default branch name if no component label matches.
+branchName: 'issue-${issue.number}-${issue.title}'
+
+# Select the branch prefix based on the component label.
+# Example result: v0.2.0-core-gameplay/issue-3-player-movement
+branches:
+  - label: 'project-setup'
+    prefix: 'v0.1.0-project-setup/'
+
+  - label: 'core-gameplay'
+    prefix: 'v0.2.0-core-gameplay/'
+
+  - label: 'combat'
+    prefix: 'v0.3.0-combat/'
+
+  - label: 'enemy-ai'
+    prefix: 'v0.4.0-enemy-ai/'
+
+  - label: 'testing'
+    prefix: 'v0.5.0-testing/'
+
+# Normalize generated branch names.
+branchNameTransformations:
+  - lower-case
+  - replace-spaces-with-hyphens

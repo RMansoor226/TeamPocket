@@ -1,0 +1,63 @@
+# ---------------------------------------------------------------
+# Component labels
+# Each issue gets exactly ONE of the branch-mapped component labels
+# (project-setup, core-gameplay, combat, enemy-ai, testing).
+# These drive branch prefixes in issue-branch.yml.
+# ---------------------------------------------------------------
+- name: project-setup
+  color: "FBCA04"
+  description: "Unity project setup, folder structure, input, and test scene"
+
+- name: core-gameplay
+  color: "5319E7"
+  description: "Player movement, camera, health, and core gameplay systems"
+
+- name: combat
+  color: "D93F0B"
+  description: "Hitboxes, damage pipeline, and player attack mechanics"
+
+- name: enemy-ai
+  color: "B60205"
+  description: "Enemy prefabs, NavMesh pathing, and enemy state machines"
+
+- name: testing
+  color: "0E8A16"
+  description: "Integration testing, playtesting, and bug verification"
+
+# ---------------------------------------------------------------
+# Supporting labels (not mapped to branch prefixes)
+# ---------------------------------------------------------------
+- name: ui
+  color: "1D76DB"
+  description: "Health bar, HUD, menus, and player feedback UI"
+
+- name: devops
+  color: "F9D0C4"
+  description: "Repository setup, Git LFS, GitHub Actions, and builds"
+
+- name: docs
+  color: "0075CA"
+  description: "Documentation and README updates"
+
+# ---------------------------------------------------------------
+# Version / milestone labels (descriptive, like the old iteration labels)
+# ---------------------------------------------------------------
+- name: v0.1.0-project-setup
+  color: "C5DEF5"
+  description: "v0.1.0: Project Setup"
+
+- name: v0.2.0-core-gameplay
+  color: "BFD4F2"
+  description: "v0.2.0: Core Gameplay (Movement, Camera, Health)"
+
+- name: v0.3.0-combat
+  color: "D4C5F9"
+  description: "v0.3.0: Combat (Hitboxes, Damage, Player Attack)"
+
+- name: v0.4.0-enemy-ai
+  color: "F5C6CB"
+  description: "v0.4.0: Enemy AI (Pathing and State Machine)"
+
+- name: v0.5.0-testing
+  color: "C2E0C6"
+  description: "v0.5.0: Integration Testing"
