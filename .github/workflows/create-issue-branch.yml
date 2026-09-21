@@ -1,0 +1,34 @@
+name: Create Issue Branch
+
+# Creates a branch when an issue receives one of the component labels:
+# database, backend, or frontend.
+#
+# The branch name and source branch rules are defined in:
+# .github/issue-branch.yml
+#
+# This workflow intentionally does NOT trigger on "opened".
+# The issue must first receive its component label so that the
+# correct branch prefix can be selected.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  create-branch:
+    # Only create a branch when one of the three component labels
+    # is added. Ignore security/docs/devops/iteration labels.
+    if: >
+      github.event.label.name == 'active'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create Issue Branch
+        uses: robvanderleek/create-issue-branch@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
