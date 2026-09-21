@@ -1,18 +1,38 @@
 name: Create Issue Branch
 
-# Creates a branch when an issue receives one of the component labels:
-# database, backend, or frontend.
+# Creates a branch for an issue when it receives the "ready" label.
 #
-# The branch name and source branch rules are defined in:
-# .github/issue-branch.yml
+# TRIGGERS
+# - issues.labeled: runs when a label is added; only the "ready" label
+#   does anything (all other labels are skipped by the job condition).
+# - workflow_dispatch (manual): BACKFILL. Finds every open issue that
+#   already has the "ready" label and creates any missing branches.
+#   Use this after running "Create Project Issues", because issues
+#   created with the default GITHUB_TOKEN do not trigger other workflows.
 #
-# This workflow intentionally does NOT trigger on "opened".
-# The issue must first receive its component label so that the
-# correct branch prefix can be selected.
+# BRANCH NAMING
+#   <prefix>issue-<number>-<lower-case-title-with-hyphens>
+#   Example: v0.2.0-core-gameplay/issue-3-player-movement
+#
+# The prefix is chosen from the issue's component label using the
+# BRANCH_PREFIXES list in the script below. Keep it in sync with
+# your version/milestone naming.
+#
+# SAFE TO RE-RUN
+# - If a branch already exists for an issue, it is skipped.
+# - Closed issues are skipped.
+# - Branches are created from the repository's default branch.
 
 on:
   issues:
     types: [labeled]
+
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only log the branches that would be created"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -20,15 +40,210 @@ permissions:
 
 jobs:
   create-branch:
-    # Only create a branch when one of the three component labels
-    # is added. Ignore security/docs/devops/iteration labels.
+    # Manual runs always proceed. Label events only proceed for "ready".
     if: >
+      github.event_name == 'workflow_dispatch' ||
       github.event.label.name == 'ready'
 
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create Issue Branch
-        uses: robvanderleek/create-issue-branch@main
+      - name: Create issue branches
+        uses: actions/github-script@v7
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const dryRun = process.env.DRY_RUN === 'true';
+
+            const READY_LABEL = 'ready';
+
+            /*
+             * Component label -> branch prefix.
+             * The first matching label (top to bottom) wins.
+             * Issues with none of these labels get no prefix.
+             */
+            const BRANCH_PREFIXES = [
+              { label: 'project-setup', prefix: 'v0.1.0-project-setup/' },
+              { label: 'core-gameplay', prefix: 'v0.2.0-core-gameplay/' },
+              { label: 'combat',        prefix: 'v0.3.0-combat/' },
+              { label: 'enemy-ai',      prefix: 'v0.4.0-enemy-ai/' },
+              { label: 'testing',       prefix: 'v0.5.0-testing/' }
+            ];
+
+            /*
+             * "Player Movement" -> "player-movement"
+             */
+            function slugify(title) {
+              return title
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 60)
+                .replace(/-+$/g, '');
+            }
+
+            /*
+             * Decide which issues to process.
+             * - Label event: just the issue that was labeled.
+             * - Manual run: every open issue that has the ready label.
+             */
+            let issues;
+
+            if (context.eventName === 'issues') {
+              issues = [context.payload.issue];
+            } else {
+              issues = await github.paginate(
+                github.rest.issues.listForRepo,
+                {
+                  owner,
+                  repo,
+                  state: 'open',
+                  labels: READY_LABEL,
+                  per_page: 100
+                }
+              );
+
+              issues = issues.filter(issue => !issue.pull_request);
+            }
+
+            console.log(
+              `Event: ${context.eventName}. ` +
+              `Issues to check: ${issues.length}. ` +
+              `Dry run: ${dryRun}.`
+            );
+
+            if (issues.length === 0) {
+              console.log('No matching issues found. Nothing to do.');
+              return;
+            }
+
+            /*
+             * Find the commit that new branches will start from.
+             */
+            const { data: repoData } =
+              await github.rest.repos.get({ owner, repo });
+
+            const defaultBranch = repoData.default_branch;
+
+            const { data: baseRef } = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: `heads/${defaultBranch}`
+            });
+
+            const baseSha = baseRef.object.sha;
+
+            console.log(
+              `Base branch: ${defaultBranch} (${baseSha.slice(0, 7)})`
+            );
+
+            let createdCount = 0;
+            let skippedCount = 0;
+            let failedCount = 0;
+
+            for (const issue of issues) {
+              const label = `#${issue.number} "${issue.title}"`;
+
+              try {
+                if (issue.state !== 'open') {
+                  console.log(`SKIP: ${label} is closed.`);
+                  skippedCount++;
+                  continue;
+                }
+
+                const labelNames = issue.labels.map(l =>
+                  typeof l === 'string' ? l : l.name
+                );
+
+                if (!labelNames.includes(READY_LABEL)) {
+                  console.log(`SKIP: ${label} does not have "${READY_LABEL}".`);
+                  skippedCount++;
+                  continue;
+                }
+
+                const match = BRANCH_PREFIXES.find(entry =>
+                  labelNames.includes(entry.label)
+                );
+
+                const prefix = match ? match.prefix : '';
+
+                if (!match) {
+                  console.log(
+                    `WARNING: ${label} has no component label. ` +
+                    `Using a branch name without a prefix.`
+                  );
+                }
+
+                const branchName =
+                  `${prefix}issue-${issue.number}-${slugify(issue.title)}`;
+
+                /*
+                 * Skip if any branch already exists for this issue.
+                 */
+                const { data: existing } =
+                  await github.rest.git.listMatchingRefs({
+                    owner,
+                    repo,
+                    ref: `heads/${prefix}issue-${issue.number}-`
+                  });
+
+                if (existing.length > 0) {
+                  console.log(
+                    `SKIP: ${label} already has branch ` +
+                    `"${existing[0].ref.replace('refs/heads/', '')}".`
+                  );
+                  skippedCount++;
+                  continue;
+                }
+
+                if (dryRun) {
+                  console.log(`DRY RUN: would create "${branchName}" for ${label}.`);
+                  skippedCount++;
+                  continue;
+                }
+
+                await github.rest.git.createRef({
+                  owner,
+                  repo,
+                  ref: `refs/heads/${branchName}`,
+                  sha: baseSha
+                });
+
+                console.log(`CREATED: "${branchName}" for ${label}.`);
+                createdCount++;
+
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  body:
+                    `Branch created: \`${branchName}\`\n\n` +
+                    `\`\`\`\ngit fetch origin\n` +
+                    `git checkout ${branchName}\n\`\`\``
+                });
+
+              } catch (error) {
+                console.error(`FAILED: ${label}`);
+                console.error(error.message);
+                failedCount++;
+              }
+            }
+
+            console.log('');
+            console.log('========================================');
+            console.log('Branch Creation Summary');
+            console.log('========================================');
+            console.log(`Issues checked:   ${issues.length}`);
+            console.log(`Branches created: ${createdCount}`);
+            console.log(`Skipped:          ${skippedCount}`);
+            console.log(`Failed:           ${failedCount}`);
+            console.log('========================================');
+
+            if (failedCount > 0) {
+              core.setFailed(
+                `${failedCount} branch(es) could not be created. ` +
+                `Review the workflow log for details.`
+              );
+            }
