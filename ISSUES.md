@@ -1,11 +1,3 @@
-# Iceflame Redemption: Project Issues
-
-Issue definitions for the Weeks 1-2 core gameplay systems. These are read by the `Create Project Issues` workflow (`create-issues.yml`).
-
-Suggested implementation order: SETUP-1, then CORE-1 to CORE-4 (movement/camera and health can be developed in parallel), then CMB-1 to CMB-3, then AI-1 and AI-2, then TEST-1.
-
----
-
 ### [SETUP-1] Project Setup and Input Foundation
 
 **Labels:** `project-setup` `devops` `v0.1.0-project-setup` `ready`
