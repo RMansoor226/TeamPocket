@@ -34,7 +34,7 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Cast Spell",
+                    "name": "CastSpell",
                     "type": "Button",
                     "id": "7200732c-be2b-4c98-887c-b25f5be5487f",
                     "expectedControlType": "",
@@ -221,7 +221,7 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "Cast Spell",
+                    "action": "CastSpell",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
