@@ -39,6 +39,19 @@ public class PlayerInputHandler : MonoBehaviour
     {
         _playerControls.Player.Disable();
     }
+    
+    public void DisableSelf() // made for player health's OnDeath event to disable input upon death
+    {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        MoveInput = Vector2.zero;
+        LookInput = Vector2.zero;
+        JumpPressed = false;
+        // idk if anything else is needed, but i figure this is good
+
+        this.enabled = false;
+    }
 
     // Update is called once per frame
     private void Update()
