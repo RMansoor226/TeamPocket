@@ -1,53 +1,101 @@
-name: Create Project Issues
+name: Sync Project Issues
 
-# Creates GitHub Issues from the issue definitions in ISSUES.md.
+# Reconciles GitHub Issues with the issue definitions in ISSUES.md.
+# This REPLACES the old "create only" workflow: it now creates NEW
+# tickets, UPDATES tickets whose title/body/labels changed, and
+# CLOSES + cleans up branches for tickets that were REMOVED from the
+# file. Run it manually any time ISSUES.md changes.
 #
-# IMPORTANT:
-# - Run this workflow manually from the GitHub Actions tab.
-# - It will NOT create duplicate issues with the same title.
-# - It checks open AND closed issues before creating anything.
-# - Labels listed in ISSUES.md are applied when each issue is created.
+# IDENTITY / HOW MATCHING WORKS
+# - Each ticket's stable identity is its bracketed ID, e.g. [CMB-4].
+# - When an issue is created, this workflow injects two hidden HTML
+#   comments as the first lines of its body:
+#     <!-- issue-id:CMB-4 -->
+#     <!-- managed-labels:["combat","v0.3.0-combat"] -->
+#   These never render on GitHub and you do not add them yourself in
+#   ISSUES.md. They let the workflow find "its" issue again even if
+#   you later edit the ticket's title or description text.
+# - Issues with no issue-id marker (created by hand, or by any other
+#   process) are never touched, updated, or closed by this workflow.
 #
-# Expected ISSUES.md format:
+# WHAT COUNTS AS A CHANGE
+# - Title text changed (the part after the [ID]) -> issue is renamed.
+# - Body text changed (ignoring the hidden markers) -> issue body is
+#   replaced with the new text (markers are re-written, not lost).
+# - Labels changed -> labels present in ISSUES.md are added; labels
+#   that THIS WORKFLOW previously added but which are no longer in
+#   ISSUES.md are removed. The "ready" label is NEVER auto-removed,
+#   because your team adds it by hand once an issue's dependencies
+#   are done -- this workflow must not undo that manual gating.
 #
-# ### [DB-1] Issue title
+# WHAT COUNTS AS A REMOVAL
+# - A managed issue's ID no longer appears as a heading in ISSUES.md.
+# - That issue is CLOSED (not deleted -- deleting issues needs
+#   repository-admin GraphQL access the default token does not have),
+#   labeled "removed", and commented on to explain why.
+# - Any branch containing "issue-<number>-" in its name is deleted,
+#   regardless of which version prefix it has.
 #
-# **Labels:** `database` `docs`
-#
-# **Owner:** Database role
-#
-# **Description**
-#
-# Issue description...
-#
-# **Tasks / Acceptance Criteria**
-#
-# - [ ] Task 1
-# - [ ] Task 2
-#
-# ---
+# SAFETY
+# - dry_run defaults to true. With dry_run, every action (create,
+#   update, close, delete-branch) is logged but NOT performed.
+#   Review the log, then re-run with dry_run set to false to apply.
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Log planned changes only; make no changes"
+        type: boolean
+        default: true
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 jobs:
-  create-issues:
+  sync-issues:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create issues from ISSUES.md
+      - name: Sync issues from ISSUES.md
         uses: actions/github-script@v7
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
         with:
           script: |
             const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const dryRun = process.env.DRY_RUN !== 'false';
 
+            // Labels this workflow will never remove automatically,
+            // even if a ticket's Labels line in ISSUES.md stops
+            // listing them. These are meant to be added by a human.
+            const PROTECTED_LABELS = ['ready'];
+
+            const ID_MARKER_RE = /^<!-- issue-id:([A-Za-z0-9-]+) -->$/m;
+            const LABELS_MARKER_RE = /^<!-- managed-labels:(\[.*?\]) -->$/m;
+
+            function markerBlock(id, labels) {
+              return (
+                `<!-- issue-id:${id} -->\n` +
+                `<!-- managed-labels:${JSON.stringify(labels)} -->\n\n`
+              );
+            }
+
+            function stripMarkers(body) {
+              return body
+                .replace(ID_MARKER_RE, '')
+                .replace(LABELS_MARKER_RE, '')
+                .trim();
+            }
+
+            // ---------------------------------------------------
+            // 1. Parse ISSUES.md
+            // ---------------------------------------------------
             const issueFile = 'ISSUES.md';
 
             if (!fs.existsSync(issueFile)) {
@@ -57,257 +105,377 @@ jobs:
 
             const markdown = fs.readFileSync(issueFile, 'utf8');
 
-            /*
-             * Find issue headings in the form:
-             *
-             * ### [DB-1] Issue title
-             * ### [API-1] Issue title
-             * ### [FE-1] Issue title
-             *
-             * The regex captures:
-             *   1. Issue ID, e.g. DB-1
-             *   2. Issue title
-             *   3. The content belonging to that issue
-             */
-            const headingRegex =
-              /^### \[([A-Z]+-\d+)\] (.+)$/gm;
-
+            // Accepts any uppercase prefix, e.g. [CMB-4], [AI-2], [SETUP-1].
+            const headingRegex = /^### \[([A-Z]+-\d+)\] (.+)$/gm;
             const matches = [...markdown.matchAll(headingRegex)];
 
             if (matches.length === 0) {
               core.setFailed(
                 'No issue definitions were found in ISSUES.md. ' +
-                'Expected headings such as "### [DB-1] Issue title".'
+                'Expected headings such as "### [CMB-4] Issue title".'
               );
               return;
             }
 
-            console.log(`Found ${matches.length} issue definitions.`);
-
-            /*
-             * Build structured issue objects.
-             */
-            const issueDefinitions = [];
+            const definitions = new Map();
 
             for (let i = 0; i < matches.length; i++) {
               const match = matches[i];
-
               const issueId = match[1];
               const title = match[2].trim();
 
               const bodyStart = match.index + match[0].length;
+              const bodyEnd = i + 1 < matches.length ? matches[i + 1].index : markdown.length;
 
-              const bodyEnd =
-                i + 1 < matches.length
-                  ? matches[i + 1].index
-                  : markdown.length;
+              let rawBody = markdown.slice(bodyStart, bodyEnd).trim();
+              rawBody = rawBody.replace(/\n---\s*$/m, '').trim();
 
-              let rawBody = markdown
-                .slice(bodyStart, bodyEnd)
-                .trim();
-
-              /*
-               * Remove the separator before the next issue.
-               *
-               * Example:
-               *
-               * ---
-               *
-               * ### [DB-2] ...
-               */
-              rawBody = rawBody
-                .replace(/\n---\s*$/m, '')
-                .trim();
-
-              /*
-               * Extract labels from:
-               *
-               * **Labels:** `database` `docs`
-               */
-              const labelsMatch = rawBody.match(
-                /\*\*Labels:\*\*\s*(.+)/
-              );
-
+              const labelsMatch = rawBody.match(/\*\*Labels:\*\*\s*(.+)/);
               let labels = [];
-
               if (labelsMatch) {
                 labels = [...labelsMatch[1].matchAll(/`([^`]+)`/g)]
-                  .map(match => match[1].trim())
+                  .map(m => m[1].trim())
                   .filter(Boolean);
               }
 
-              /*
-               * Remove the Labels line from the issue body because
-               * GitHub will receive those values as actual labels.
-               */
-              rawBody = rawBody
-                .replace(
-                  /\*\*Labels:\*\*\s*.+\n?/,
-                  ''
-                )
-                .trim();
+              rawBody = rawBody.replace(/\*\*Labels:\*\*\s*.+\n?/, '').trim();
 
-              /*
-               * The Owner field describes a project role rather than
-               * a GitHub username, so it is retained in the issue body.
-               */
+              if (definitions.has(issueId)) {
+                core.warning(`Duplicate issue ID "${issueId}" in ISSUES.md; using the last occurrence.`);
+              }
 
-              issueDefinitions.push({
-                issueId,
-                title,
-                body: rawBody,
-                labels
-              });
+              definitions.set(issueId, { issueId, title, body: rawBody, labels });
             }
 
-            /*
-             * Fetch ALL existing issues, including closed issues.
-             *
-             * This prevents the workflow from recreating an issue that
-             * was previously created and later closed.
-             */
-            const existingIssues = await github.paginate(
-              github.rest.issues.listForRepo,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'all',
-                per_page: 100
-              }
-            );
+            console.log(`Parsed ${definitions.size} issue definitions from ${issueFile}.`);
 
-            /*
-             * Ignore pull requests when checking for existing issues.
-             */
-            const existingTitles = new Set(
-              existingIssues
-                .filter(issue => !issue.pull_request)
-                .map(issue => issue.title.trim())
-            );
+            // ---------------------------------------------------
+            // 2. Fetch all existing issues (open + closed)
+            // ---------------------------------------------------
+            const allIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'all',
+              per_page: 100
+            });
+
+            const realIssues = allIssues.filter(issue => !issue.pull_request);
+
+            // Managed issues: have our hidden issue-id marker.
+            const managedById = new Map();
+            // Unmanaged issues: no marker. Only used to avoid accidental
+            // title collisions when creating new issues.
+            const unmanagedTitles = new Set();
+
+            for (const issue of realIssues) {
+              const body = issue.body || '';
+              const idMatch = body.match(ID_MARKER_RE);
+
+              if (idMatch) {
+                if (managedById.has(idMatch[1])) {
+                  core.warning(
+                    `Multiple issues are marked as "${idMatch[1]}" ` +
+                    `(#${managedById.get(idMatch[1]).number} and #${issue.number}). ` +
+                    `Using the most recently updated one.`
+                  );
+                  const prev = managedById.get(idMatch[1]);
+                  if (new Date(issue.updated_at) > new Date(prev.updated_at)) {
+                    managedById.set(idMatch[1], issue);
+                  }
+                } else {
+                  managedById.set(idMatch[1], issue);
+                }
+              } else {
+                unmanagedTitles.add(issue.title.trim());
+              }
+            }
 
             console.log(
-              `Found ${existingTitles.size} existing GitHub issues.`
+              `Found ${realIssues.length} existing issues ` +
+              `(${managedById.size} managed by this workflow, ` +
+              `${unmanagedTitles.size} unmanaged).`
             );
 
+            // ---------------------------------------------------
+            // 3. Create / update issues defined in ISSUES.md
+            // ---------------------------------------------------
             let createdCount = 0;
-            let skippedCount = 0;
+            let updatedCount = 0;
+            let unchangedCount = 0;
             let failedCount = 0;
 
-            /*
-             * Create issues one at a time.
-             *
-             * Sequential creation is intentional:
-             * it makes the workflow easier to troubleshoot and avoids
-             * unnecessarily hitting GitHub's API rate limits.
-             */
-            for (const issue of issueDefinitions) {
-              /*
-               * Prevent duplicate creation.
-               */
-              if (existingTitles.has(issue.title)) {
-                console.log(
-                  `SKIP: ${issue.issueId} "${issue.title}" already exists.`
-                );
-
-                skippedCount++;
-                continue;
-              }
-
-              /*
-               * Validate that every requested label exists before
-               * attempting to create the issue.
-               *
-               * This makes failures easier to understand if the
-               * label synchronization workflow has not been run yet.
-               */
-              const missingLabels = [];
-
-              for (const label of issue.labels) {
+            async function ensureLabelsExist(labels) {
+              const missing = [];
+              for (const label of labels) {
                 try {
-                  await github.rest.issues.getLabel({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    name: label
-                  });
+                  await github.rest.issues.getLabel({ owner, repo, name: label });
                 } catch (error) {
                   if (error.status === 404) {
-                    missingLabels.push(label);
+                    missing.push(label);
                   } else {
                     throw error;
                   }
                 }
               }
+              return missing;
+            }
 
-              if (missingLabels.length > 0) {
-                console.log(
-                  `WARNING: ${issue.issueId} references labels that ` +
-                  `do not currently exist: ${missingLabels.join(', ')}`
-                );
-
-                /*
-                 * Do not fail the entire workflow because of a missing
-                 * label. The issue will still be created without the
-                 * missing labels.
-                 */
-                issue.labels = issue.labels.filter(
-                  label => !missingLabels.includes(label)
-                );
-              }
+            for (const def of definitions.values()) {
+              const tag = `${def.issueId} "${def.title}"`;
 
               try {
-                const createdIssue =
-                  await github.rest.issues.create({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    title: issue.title,
-                    body: issue.body,
-                    labels: issue.labels
+                const missingLabels = await ensureLabelsExist(def.labels);
+                if (missingLabels.length > 0) {
+                  console.log(
+                    `WARNING: ${tag} references labels that do not exist yet: ` +
+                    `${missingLabels.join(', ')}. Run the label-sync workflow first.`
+                  );
+                }
+                const applicableLabels = def.labels.filter(l => !missingLabels.includes(l));
+
+                const existing = managedById.get(def.issueId);
+
+                if (!existing) {
+                  // New ticket.
+                  if (unmanagedTitles.has(def.title)) {
+                    console.log(
+                      `SKIP (collision): ${tag} matches the title of an ` +
+                      `existing unmanaged issue. Resolve manually.`
+                    );
+                    continue;
+                  }
+
+                  const newBody = markerBlock(def.issueId, applicableLabels) + def.body;
+
+                  if (dryRun) {
+                    console.log(`DRY RUN: would CREATE ${tag}.`);
+                    createdCount++;
+                    continue;
+                  }
+
+                  const created = await github.rest.issues.create({
+                    owner,
+                    repo,
+                    title: def.title,
+                    body: newBody,
+                    labels: applicableLabels
                   });
 
-                console.log(
-                  `CREATED: ${issue.issueId} ` +
-                  `#${createdIssue.data.number} "${issue.title}"`
+                  console.log(`CREATED: ${tag} -> #${created.data.number}`);
+                  createdCount++;
+                  continue;
+                }
+
+                // Existing managed ticket: diff title / body / labels.
+                const existingLabels = existing.labels.map(l => (typeof l === 'string' ? l : l.name));
+                const labelsMarkerMatch = (existing.body || '').match(LABELS_MARKER_RE);
+                let previouslyManagedLabels = [];
+                if (labelsMarkerMatch) {
+                  try {
+                    previouslyManagedLabels = JSON.parse(labelsMarkerMatch[1]);
+                  } catch {
+                    previouslyManagedLabels = [];
+                  }
+                }
+
+                const titleChanged = existing.title.trim() !== def.title;
+                const bodyChanged = stripMarkers(existing.body || '') !== def.body.trim();
+
+                const labelsToAdd = applicableLabels.filter(l => !existingLabels.includes(l));
+                const labelsToRemove = previouslyManagedLabels.filter(
+                  l =>
+                    !applicableLabels.includes(l) &&
+                    existingLabels.includes(l) &&
+                    !PROTECTED_LABELS.includes(l)
                 );
 
-                createdCount++;
+                const needsUpdate =
+                  titleChanged || bodyChanged || labelsToAdd.length > 0 || labelsToRemove.length > 0;
 
-                /*
-                 * Add the title immediately to our local set so that
-                 * duplicate definitions inside ISSUES.md cannot create
-                 * duplicate issues during this same workflow run.
-                 */
-                existingTitles.add(issue.title);
+                if (!needsUpdate) {
+                  console.log(`UNCHANGED: ${tag} (#${existing.number})`);
+                  unchangedCount++;
+                  continue;
+                }
 
+                const changeParts = [];
+                if (titleChanged) changeParts.push('title');
+                if (bodyChanged) changeParts.push('body');
+                if (labelsToAdd.length > 0) changeParts.push(`+labels[${labelsToAdd.join(', ')}]`);
+                if (labelsToRemove.length > 0) changeParts.push(`-labels[${labelsToRemove.join(', ')}]`);
+
+                if (dryRun) {
+                  console.log(`DRY RUN: would UPDATE ${tag} (#${existing.number}): ${changeParts.join(', ')}`);
+                  updatedCount++;
+                  continue;
+                }
+
+                const newBody = markerBlock(def.issueId, applicableLabels) + def.body;
+
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: existing.number,
+                  title: def.title,
+                  body: newBody
+                });
+
+                if (labelsToAdd.length > 0) {
+                  await github.rest.issues.addLabels({
+                    owner,
+                    repo,
+                    issue_number: existing.number,
+                    labels: labelsToAdd
+                  });
+                }
+
+                for (const label of labelsToRemove) {
+                  await github.rest.issues.removeLabel({
+                    owner,
+                    repo,
+                    issue_number: existing.number,
+                    name: label
+                  });
+                }
+
+                console.log(`UPDATED: ${tag} (#${existing.number}): ${changeParts.join(', ')}`);
+                updatedCount++;
               } catch (error) {
-                console.error(
-                  `FAILED: ${issue.issueId} "${issue.title}"`
-                );
+                console.error(`FAILED: ${tag}`);
                 console.error(error.message);
-
                 failedCount++;
               }
             }
 
-            /*
-             * Final summary.
-             */
+            // ---------------------------------------------------
+            // 4. Close + clean up tickets removed from ISSUES.md
+            // ---------------------------------------------------
+            let closedCount = 0;
+            let branchesDeletedCount = 0;
+
+            const removedIds = [...managedById.keys()].filter(id => !definitions.has(id));
+
+            if (removedIds.length === 0) {
+              console.log('No managed issues were removed from ISSUES.md.');
+            }
+
+            for (const id of removedIds) {
+              const issue = managedById.get(id);
+              const tag = `${id} "${issue.title}" (#${issue.number})`;
+
+              if (issue.state === 'closed') {
+                console.log(`SKIP (already closed): ${tag}`);
+                continue;
+              }
+
+              try {
+                if (dryRun) {
+                  console.log(`DRY RUN: would CLOSE and label "removed": ${tag}`);
+                } else {
+                  const removedLabelMissing = await ensureLabelsExist(['removed']);
+                  if (removedLabelMissing.length > 0) {
+                    console.log(
+                      `WARNING: "removed" label does not exist yet. ` +
+                      `Add it to labels.yml and run the label-sync workflow. ` +
+                      `Closing ${tag} without it.`
+                    );
+                  }
+
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    body:
+                      `This ticket (\`${id}\`) no longer appears in \`ISSUES.md\` ` +
+                      `and has been closed automatically by the issue-sync workflow. ` +
+                      `Any branch for this issue has also been deleted.`
+                  });
+
+                  if (removedLabelMissing.length === 0) {
+                    await github.rest.issues.addLabels({
+                      owner,
+                      repo,
+                      issue_number: issue.number,
+                      labels: ['removed']
+                    });
+                  }
+
+                  await github.rest.issues.update({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    state: 'closed',
+                    state_reason: 'not_planned'
+                  });
+
+                  console.log(`CLOSED: ${tag}`);
+                }
+
+                closedCount++;
+
+                // Delete any branch containing "issue-<number>-", regardless
+                // of its version/component prefix.
+                const allBranches = await github.paginate(github.rest.repos.listBranches, {
+                  owner,
+                  repo,
+                  per_page: 100
+                });
+
+                const marker = `issue-${issue.number}-`;
+                const matchingBranches = allBranches.filter(b => b.name.includes(marker));
+
+                for (const branch of matchingBranches) {
+                  if (dryRun) {
+                    console.log(`DRY RUN: would DELETE branch "${branch.name}" for ${tag}`);
+                    branchesDeletedCount++;
+                    continue;
+                  }
+
+                  try {
+                    await github.rest.git.deleteRef({
+                      owner,
+                      repo,
+                      ref: `heads/${branch.name}`
+                    });
+                    console.log(`DELETED BRANCH: "${branch.name}" for ${tag}`);
+                    branchesDeletedCount++;
+                  } catch (error) {
+                    console.error(`FAILED to delete branch "${branch.name}" for ${tag}`);
+                    console.error(error.message);
+                    failedCount++;
+                  }
+                }
+
+                if (matchingBranches.length === 0) {
+                  console.log(`No branch found for ${tag}.`);
+                }
+              } catch (error) {
+                console.error(`FAILED to close ${tag}`);
+                console.error(error.message);
+                failedCount++;
+              }
+            }
+
+            // ---------------------------------------------------
+            // 5. Summary
+            // ---------------------------------------------------
             console.log('');
             console.log('========================================');
-            console.log('Issue Creation Summary');
+            console.log('Issue Sync Summary' + (dryRun ? ' (DRY RUN)' : ''));
             console.log('========================================');
-            console.log(`Definitions found: ${issueDefinitions.length}`);
-            console.log(`Issues created:     ${createdCount}`);
-            console.log(`Issues skipped:     ${skippedCount}`);
-            console.log(`Issues failed:      ${failedCount}`);
+            console.log(`Definitions in ISSUES.md: ${definitions.size}`);
+            console.log(`Created:                  ${createdCount}`);
+            console.log(`Updated:                  ${updatedCount}`);
+            console.log(`Unchanged:                ${unchangedCount}`);
+            console.log(`Closed (removed):         ${closedCount}`);
+            console.log(`Branches deleted:         ${branchesDeletedCount}`);
+            console.log(`Failed:                   ${failedCount}`);
             console.log('========================================');
 
-            /*
-             * Fail the workflow if one or more issues could not be created.
-             * This makes a failed run immediately visible in GitHub Actions.
-             */
+            if (dryRun) {
+              console.log('This was a dry run. Re-run with dry_run=false to apply these changes.');
+            }
+
             if (failedCount > 0) {
-              core.setFailed(
-                `${failedCount} issue(s) failed to be created. ` +
-                `Review the workflow log for details.`
-              );
+              core.setFailed(`${failedCount} operation(s) failed. Review the log for details.`);
             }
