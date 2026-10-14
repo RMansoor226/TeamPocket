@@ -112,14 +112,14 @@ Give the player visible health feedback and a defined death state, so the player
 - [ ] Restart correctly resets player health and scene state
 
 ---
-
+ 
 ### [CMB-1] Hitbox and Hurtbox Core Pipeline
  
 **Labels:** `combat` `v0.3.0-combat` `ready`
  
 **Owner:** Gameplay Programmer (TBD)
  
-**Depends on:** CORE-3, CORE-4
+**Depends on:** None (uses the existing Health system)
  
 **Description**
  
@@ -157,7 +157,7 @@ Create a stationary, damageable training dummy prefab. This is a pure test targe
 - [ ] Multiple dummies placed in `TestArena`
 ---
  
-### [CMB-3] Player Target Lock
+### [CMB-9] Player Target Lock
  
 **Labels:** `combat` `v0.3.0-combat` `ready`
  
@@ -361,7 +361,7 @@ Add Attack and Dead states to the enemy state machine, using the existing hitbox
  
 **Owner:** Whole team
  
-**Depends on:** CMB-1 through CMB-8, AI-1 through AI-3
+**Depends on:** CMB-1 through CMB-9, AI-1 through AI-3
  
 **Description**
  
