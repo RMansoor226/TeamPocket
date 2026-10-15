@@ -5,6 +5,8 @@ public class Hurtbox : MonoBehaviour
     private Health _health;
     public Health Owner => _health;
 
+    [SerializeField] private float damageMultiplier = 1f;
+
     private void Awake()
     {
         _health = GetComponentInParent<Health>();
@@ -16,8 +18,9 @@ public class Hurtbox : MonoBehaviour
 
     public void ReceiveHit(float amount)
     {
-        Debug.Log($"ReceiveHit invoked with {amount} damage");
-        _health.TakeDamage(amount);
+        float finalDamage = amount * damageMultiplier;
+        Debug.Log($"ReceiveHit invoked with {finalDamage} damage");
+        _health.TakeDamage(finalDamage);
     }
 
     // private void OnTriggerEnter(Collider other)

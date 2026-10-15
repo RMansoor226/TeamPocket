@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Unity.Hierarchy;
 using UnityEngine;
 
 public class Hitbox : MonoBehaviour
@@ -7,6 +9,8 @@ public class Hitbox : MonoBehaviour
     
     [SerializeField] private float damage;
 
+    private readonly HashSet<Health> _alreadyHit = new();
+    
     private void Awake()
     {
         _collider = GetComponent<CapsuleCollider>();
@@ -21,7 +25,17 @@ public class Hitbox : MonoBehaviour
     {
         if (other.TryGetComponent<Hurtbox>(out Hurtbox hb))
         {
+            if (hb.Owner == null)
+            {
+                Debug.LogError("No Health component that owns Hurtbox");
+                return;
+            }
+            
+            if (!_alreadyHit.Add(hb.Owner)) return;
+            
             hb.ReceiveHit(damage);
+            
+            Debug.Log($"Hit landed at {Time.frameCount}");
         }
     }
 
@@ -29,6 +43,7 @@ public class Hitbox : MonoBehaviour
     public void Enable()
     {
         _collider.enabled = true;
+        _alreadyHit.Clear();
     }
     
     [ContextMenu("Disable Hitbox")]
@@ -36,4 +51,19 @@ public class Hitbox : MonoBehaviour
     {
         _collider.enabled = false;
     }
+
+    // private void OnDrawGizmos()
+    // {
+    //     Gizmos.matrix = transform.localToWorldMatrix;
+    //
+    //     if (_collider.enabled)
+    //     {
+    //         Gizmos.color = Color.red;
+    //     }
+    //     else
+    //     {
+    //         Gizmos.color = Color.gray;
+    //     }
+    //     
+    // }
 }
