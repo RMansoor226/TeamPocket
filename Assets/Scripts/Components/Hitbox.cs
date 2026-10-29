@@ -1,42 +1,62 @@
 using System;
 using System.Collections.Generic;
-using Unity.Hierarchy;
+using Components;
 using UnityEngine;
 
 public class Hitbox : MonoBehaviour
 {
-    private CapsuleCollider _collider;
+    private Collider _collider;
+    private GameObject _ownerRoot;
     
     [SerializeField] private float damage;
+    [SerializeField] private DamageType damageType;
 
     private readonly HashSet<Health> _alreadyHit = new();
     
     private void Awake()
     {
-        _collider = GetComponent<CapsuleCollider>();
+        Health ownerHealth = GetComponentInParent<Health>();
+        _ownerRoot = ownerHealth != null ? ownerHealth.gameObject 
+            : transform.root.gameObject;
+        
+        _collider = GetComponent<Collider>();
         if (_collider == null)
         {
-            Debug.LogError("No Capsule Collider Attached!");
+            Debug.LogError($"{name}: No Collider Attached to Hitbox!", this);
+            enabled = false;
+            return;
+        }
+
+        if (!_collider.isTrigger)
+        {
+            Debug.LogWarning($"{name}: Hitbox Collider is not set to trigger! Manually forcing it.", this);
+            _collider.isTrigger = true;
         }
 
         Disable();
     }
+    
     private void OnTriggerEnter(Collider other)
     {
-        if (other.TryGetComponent<Hurtbox>(out Hurtbox hb))
+        if (!other.TryGetComponent<Hurtbox>(out Hurtbox hb))
         {
-            if (hb.Owner == null)
-            {
-                Debug.LogError("No Health component that owns Hurtbox");
-                return;
-            }
-            
-            if (!_alreadyHit.Add(hb.Owner)) return;
-            
-            hb.ReceiveHit(damage);
-            
-            Debug.Log($"Hit landed at {Time.frameCount}");
+            Debug.LogWarning($"{other.name} has no hurtbox");
+            return;
         }
+        
+        if (hb.Owner == null)
+        {
+            Debug.LogError("No Health component that owns Hurtbox");
+            return;
+        }
+            
+        if (!_alreadyHit.Add(hb.Owner))
+        {
+            Debug.Log("Object was already hit");
+            return;
+        }
+            
+        hb.ReceiveHit(new DamageInfo(damage, _ownerRoot, damageType));
     }
 
     [ContextMenu("Enable Hitbox")]
@@ -51,19 +71,4 @@ public class Hitbox : MonoBehaviour
     {
         _collider.enabled = false;
     }
-
-    // private void OnDrawGizmos()
-    // {
-    //     Gizmos.matrix = transform.localToWorldMatrix;
-    //
-    //     if (_collider.enabled)
-    //     {
-    //         Gizmos.color = Color.red;
-    //     }
-    //     else
-    //     {
-    //         Gizmos.color = Color.gray;
-    //     }
-    //     
-    // }
 }

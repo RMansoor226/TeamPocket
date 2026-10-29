@@ -2386,7 +2386,7 @@ GameObject:
   - component: {fileID: 1105535887}
   - component: {fileID: 1105535886}
   m_Layer: 0
-  m_Name: Hurtbox
+  m_Name: Head Hurtbox
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2426,10 +2426,10 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.5
-  m_Height: 0.5
+  m_Radius: 0.375
+  m_Height: 0.375
   m_Direction: 1
-  m_Center: {x: 0, y: 0.5, z: 0}
+  m_Center: {x: 0, y: 0.625, z: 0}
 --- !u!114 &1105535887
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2442,6 +2442,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68f003051716bae41afa2b02674894ae, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Hurtbox
+  damageMultiplier: 2
 --- !u!1 &1167450600
 GameObject:
   m_ObjectHideFlags: 0
@@ -2533,7 +2534,7 @@ GameObject:
   - component: {fileID: 1186579039}
   - component: {fileID: 1186579038}
   m_Layer: 0
-  m_Name: Hurtbox
+  m_Name: Body Hurtbox
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2573,10 +2574,10 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.75
-  m_Height: 2
+  m_Radius: 0.5
+  m_Height: 1.25
   m_Direction: 1
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Center: {x: 0, y: -0.375, z: 0}
 --- !u!114 &1186579039
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2589,6 +2590,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68f003051716bae41afa2b02674894ae, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Hurtbox
+  damageMultiplier: 1
 --- !u!1 &1280723910
 GameObject:
   m_ObjectHideFlags: 0
@@ -2806,6 +2808,7 @@ GameObject:
   - component: {fileID: 1499134906}
   - component: {fileID: 1499134905}
   - component: {fileID: 1499134904}
+  - component: {fileID: 1499134909}
   m_Layer: 0
   m_Name: Hitbox
   m_TagString: Untagged
@@ -2928,13 +2931,26 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1499134903}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 3.237, z: 5}
+  m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
+  m_LocalPosition: {x: 2, y: 1.255, z: 5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
+--- !u!114 &1499134909
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1499134903}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 330c37dcb4cc86f47a9ab40d75732cf6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Hitbox
+  damage: 50
 --- !u!1 &1519766146
 GameObject:
   m_ObjectHideFlags: 0

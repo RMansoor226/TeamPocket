@@ -1,3 +1,4 @@
+using Components;
 using UnityEngine;
 
 public class Hurtbox : MonoBehaviour
@@ -13,19 +14,15 @@ public class Hurtbox : MonoBehaviour
         if (_health == null)
         {
             Debug.LogError("No Health Component Attached in Parent");
+            return;
         }
     }
 
-    public void ReceiveHit(float amount)
+    public void ReceiveHit(DamageInfo damageInfo)
     {
-        float finalDamage = amount * damageMultiplier;
-        Debug.Log($"ReceiveHit invoked with {finalDamage} damage");
-        _health.TakeDamage(finalDamage);
+        float finalDamage = damageInfo.Amount * damageMultiplier;
+        DamageInfo newDamageInfo = new DamageInfo(finalDamage, damageInfo.Source, damageInfo.Type);
+        
+        _health.TakeDamage(newDamageInfo);
     }
-
-    // private void OnTriggerEnter(Collider other)
-    // {
-    //     Debug.Log("Entered Trigger");
-    //     ReceiveHit(10);
-    // } 
 }
