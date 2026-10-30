@@ -7,6 +7,7 @@ public class Hitbox : MonoBehaviour
 {
     private Collider _collider;
     private GameObject _ownerRoot;
+    private Health _ownerHealth;
     
     [SerializeField] private float damage;
     [SerializeField] private DamageType damageType;
@@ -15,8 +16,8 @@ public class Hitbox : MonoBehaviour
     
     private void Awake()
     {
-        Health ownerHealth = GetComponentInParent<Health>();
-        _ownerRoot = ownerHealth != null ? ownerHealth.gameObject 
+        _ownerHealth = GetComponentInParent<Health>();
+        _ownerRoot = _ownerHealth != null ? _ownerHealth.gameObject 
             : transform.root.gameObject;
         
         _collider = GetComponent<Collider>();
@@ -49,6 +50,8 @@ public class Hitbox : MonoBehaviour
             Debug.LogError("No Health component that owns Hurtbox");
             return;
         }
+
+        if (hb.Owner == _ownerHealth) return;
             
         if (!_alreadyHit.Add(hb.Owner))
         {
